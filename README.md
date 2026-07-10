@@ -1,4 +1,4 @@
-# QianYue AI (千约 AI) - Google Gemini Integration
+# YORA | CONTRACT RISK ANALYZER AI (永睿 AI) - Google Gemini Integration
 
 This application provides intelligent legal risk assessment for international commercial agreements in the Indonesian market, powered by Google Gemini AI.
 
