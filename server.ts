@@ -314,7 +314,7 @@ async function callGeminiWithRetry(params: any, retries = 4, delayMs = 1500) {
   let attempt = 0;
   const originalModel = params.model;
   // Fallback chain of robust text models if gemini-2.5-flash is unavailable
-  const backupModels = ["gemini-2.0-flash", "gemini-1.5-flash"];
+  const backupModels = ["gemini-3.1-flash-lite"];
   
   while (attempt < retries) {
     try {
@@ -657,7 +657,7 @@ ${contractText}`;
         : 20000;
 
     const response = await callGeminiWithRetry({
-      model: "gemini-2.5-flash",
+      model: "gemini-3.5-flash",
       contents: finalPrompt,
       config: {
         responseMimeType: "application/json",
@@ -773,7 +773,7 @@ JSON PAYLOAD:
 ${JSON.stringify(payload)}`;
 
     const response = await callGeminiWithRetry({
-      model: "gemini-2.5-flash",
+      model: "gemini-3.5-flash",
       contents: prompt,
       config: {
         maxOutputTokens: 16384,
@@ -883,7 +883,7 @@ ${messageText}
 `;
 
     const response = await callGeminiWithRetry({
-      model: "gemini-2.5-flash",
+      model: "gemini-3.5-flash",
       contents: prompt,
       config: {
         maxOutputTokens: 1024,
@@ -941,7 +941,7 @@ CONTRACT:
 ${contractText}`;
 
     const response = await callGeminiWithRetry({
-      model: "gemini-2.5-flash",
+      model: "gemini-3.5-flash",
       contents: prompt,
       config: {
         maxOutputTokens: 8192,
