@@ -5,15 +5,17 @@ let sheetsClient: any = null;
 function getSheets() {
   if (!sheetsClient) {
     const clientEmail = process.env.GOOGLE_SHEETS_CLIENT_EMAIL;
-    const privateKey = process.env.GOOGLE_SHEETS_PRIVATE_KEY;
-    if (!clientEmail || !privateKey) {
-      console.error("GOOGLE_SHEETS_CLIENT_EMAIL or GOOGLE_SHEETS_PRIVATE_KEY is missing from env.");
+    // Private key is split across two env vars because some hosts (e.g. Back4app)
+    // truncate env var values at 1024 chars, which is shorter than a full RSA key.
+    const privateKeyRaw = (process.env.GOOGLE_SHEETS_PRIVATE_KEY_1 || '') + (process.env.GOOGLE_SHEETS_PRIVATE_KEY_2 || '');
+    if (!clientEmail || !privateKeyRaw) {
+      console.error("GOOGLE_SHEETS_CLIENT_EMAIL or GOOGLE_SHEETS_PRIVATE_KEY_1/2 is missing from env.");
       return null;
     }
 
     const auth = new google.auth.JWT({
       email: clientEmail,
-      key: privateKey.replace(/\\n/g, '\n'),
+      key: privateKeyRaw.replace(/\\n/g, '\n'),
       scopes: ['https://www.googleapis.com/auth/spreadsheets']
     });
 
@@ -178,4 +180,3 @@ export async function appendFeedback(email: string, rating: number, comment: str
     console.error("Failed to append feedback to Google Sheets:", error);
   }
 }
-
