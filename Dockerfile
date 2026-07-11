@@ -7,6 +7,7 @@ COPY package*.json ./
 RUN npm install
 
 COPY . .
+# Runs: vite build (frontend -> dist/) + esbuild bundle (server.ts -> dist/server.cjs)
 RUN npm run build
 
 # ---- Production stage ----
@@ -14,14 +15,14 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Production deps only (server.cjs requires these at runtime since --packages=external)
+# server.cjs uses --packages=external, so node_modules must exist at runtime
 COPY package*.json ./
 RUN npm install --omit=dev
 
-# Copy built output (contains both frontend static files AND server.cjs)
+# dist/ contains both the built frontend AND server.cjs
 COPY --from=builder /app/dist ./dist
 
 ENV NODE_ENV=production
-EXPOSE 8080
+EXPOSE 3000
 
 CMD ["node", "dist/server.cjs"]
