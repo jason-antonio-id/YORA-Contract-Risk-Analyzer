@@ -1,6 +1,7 @@
 import express from "express";
 import path from "path";
 import fs from "fs";
+import crypto from "crypto";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
 import { Agent, setGlobalDispatcher } from "undici";
@@ -23,7 +24,27 @@ setGlobalDispatcher(
 
 const app = express();
 app.set('trust proxy', 1);
-const PORT = process.env.PORT || 3000;
+const PORT = Number(process.env.PORT) || 3000;
+
+// In-memory job store for async contract analysis (avoids Back4app's gateway
+// proxy timeout, which is shorter than a full Gemini contract analysis can take).
+// NOTE: this is per-instance. If this service ever scales to multiple instances,
+// this needs to move to Firestore/Redis, same as was done for the OTP store.
+type AnalysisJob = {
+  status: "pending" | "done" | "error";
+  result?: any;
+  error?: string;
+  createdAt: number;
+};
+const analysisJobs = new Map<string, AnalysisJob>();
+
+// Clean up jobs older than 30 minutes so the map doesn't grow forever
+setInterval(() => {
+  const cutoff = Date.now() - 30 * 60 * 1000;
+  for (const [id, job] of analysisJobs.entries()) {
+    if (job.createdAt < cutoff) analysisJobs.delete(id);
+  }
+}, 5 * 60 * 1000);
 
 // Body parsers
 app.use(express.json({ limit: "15mb" }));
@@ -313,7 +334,7 @@ setInterval(() => {
 async function callGeminiWithRetry(params: any, retries = 4, delayMs = 1500) {
   let attempt = 0;
   const originalModel = params.model;
-  // Fallback chain of robust text models if gemini-2.5-flash is unavailable
+  // Fallback chain of robust text models if gemini-3.5-flash is unavailable
   const backupModels = ["gemini-3.1-flash-lite"];
   
   while (attempt < retries) {
@@ -541,6 +562,47 @@ app.post("/api/analyze", rateLimiter, async (req, res) => {
       return res.status(500).json({ error: "Server GEMINI_API_KEY is not configured." });
     }
 
+    // Create the job and respond immediately so we never hold this HTTP
+    // request open long enough to hit Back4app's gateway timeout.
+    const jobId = crypto.randomUUID();
+    analysisJobs.set(jobId, { status: "pending", createdAt: Date.now() });
+    res.status(202).json({ jobId });
+
+    // Run the actual Gemini analysis in the background. Nothing below this
+    // point can use `res` again — the response has already been sent.
+    runContractAnalysis({ contractText, outputLang, jobId, ip, finalUserEmail });
+  } catch (error: any) {
+    console.error("Analysis Error:", error);
+    logEvent("analyze_error", { ip, email: finalUserEmail });
+    if (!res.headersSent) {
+      res.status(500).json({ error: "An unexpected error occurred. Please try again." });
+    }
+  }
+});
+
+// API Route: Poll for the result of a background analysis job
+app.get("/api/analyze/status/:jobId", (req, res) => {
+  const job = analysisJobs.get(req.params.jobId);
+  if (!job) {
+    return res.status(404).json({ error: "Job not found or expired." });
+  }
+  if (job.status === "pending") {
+    return res.json({ status: "pending" });
+  }
+  if (job.status === "error") {
+    return res.json({ status: "error", error: job.error });
+  }
+  return res.json({ status: "done", result: job.result });
+});
+
+async function runContractAnalysis({ contractText, outputLang, jobId, ip, finalUserEmail }: {
+  contractText: string;
+  outputLang: string;
+  jobId: string;
+  ip: string;
+  finalUserEmail: string;
+}) {
+  try {
     const getLanguageInstruction = (oLang: string) => {
       if (oLang === "en") return "You must respond entirely in English. Every single text value in your JSON output must be written in English. No Chinese characters. No Indonesian words. English only.";
       if (oLang === "cn") return "You must respond entirely in Simplified Mandarin Chinese (简体中文). Every single text value in your JSON output must be written in Simplified Mandarin Chinese. No English. No Indonesian. Chinese only.";
@@ -667,7 +729,8 @@ ${contractText}`;
 
     const aiText = response.text;
     if (!aiText) {
-      return res.status(500).json({ error: "Empty response from Gemini GenAI model" });
+      analysisJobs.set(jobId, { status: "error", error: "Empty response from Gemini GenAI model", createdAt: Date.now() });
+      return;
     }
 
     const parsed = safeJsonParse(aiText);
@@ -705,9 +768,12 @@ ${contractText}`;
         missing_clauses_broken: missingClausesBroken,
       });
       logEvent("analyze_error", { ip, email: finalUserEmail });
-      return res.status(500).json({ 
-        error: "Analysis was cut off before completing. Please try again — this usually resolves on retry." 
+      analysisJobs.set(jobId, {
+        status: "error",
+        error: "Analysis was cut off before completing. Please try again — this usually resolves on retry.",
+        createdAt: Date.now(),
       });
+      return;
     }
 
     logEvent("analyze_success", { 
@@ -717,7 +783,7 @@ ${contractText}`;
       risk_level: parsed?.risk_level 
     });
 
-    res.json(parsed);
+    analysisJobs.set(jobId, { status: "done", result: parsed, createdAt: Date.now() });
   } catch (error: any) {
     console.error("Analysis Error:", error);
     logEvent("analyze_error", { ip, email: finalUserEmail });
@@ -727,11 +793,13 @@ ${contractText}`;
       error.message.includes("Failed to parse") ||
       error.message.includes("currently experiencing")
     );
-    res.status(500).json({ 
-      error: isKnownUserError ? error.message : "An unexpected error occurred. Please try again." 
+    analysisJobs.set(jobId, {
+      status: "error",
+      error: isKnownUserError ? error.message : "An unexpected error occurred. Please try again.",
+      createdAt: Date.now(),
     });
   }
-});
+}
 
 // API Route: Translate Analysis Report
 app.post("/api/translate", rateLimiter, async (req, res) => {
