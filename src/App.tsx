@@ -407,7 +407,7 @@ export default function App() {
     setMessages([]);
 
     try {
-      const response = await fetch('/api/analyze', {
+      const submitResponse = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -418,12 +418,42 @@ export default function App() {
         })
       });
 
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.error || `Server error: ${response.status}`);
+      if (!submitResponse.ok) {
+        const errData = await submitResponse.json().catch(() => ({}));
+        throw new Error(errData.error || `Server error: ${submitResponse.status}`);
       }
 
-      const parsed = await response.json();
+      const { jobId } = await submitResponse.json();
+
+      // Poll for the result. This avoids holding one HTTP request open long
+      // enough to hit the hosting platform's gateway timeout.
+      const POLL_INTERVAL_MS = 3000;
+      const MAX_WAIT_MS = 5 * 60 * 1000; // 5 minutes, matches server-side Gemini timeout
+      const startTime = Date.now();
+
+      let parsed: any = null;
+      while (true) {
+        if (Date.now() - startTime > MAX_WAIT_MS) {
+          throw new Error("Analysis is taking longer than expected. Please try again.");
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+
+        const statusResponse = await fetch(`/api/analyze/status/${jobId}`);
+        if (!statusResponse.ok) {
+          throw new Error(`Server error: ${statusResponse.status}`);
+        }
+        const statusData = await statusResponse.json();
+
+        if (statusData.status === "pending") {
+          continue;
+        }
+        if (statusData.status === "error") {
+          throw new Error(statusData.error || "Analysis failed");
+        }
+        parsed = statusData.result;
+        break;
+      }
       
       const genId = generateReportId();
       setMasterResult(parsed);
