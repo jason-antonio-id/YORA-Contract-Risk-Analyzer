@@ -1100,4 +1100,12 @@ async function startServer() {
   });
 }
 
-startServer().catch(console.error);
+// Only boot a real listening server outside of Vercel. On Vercel, api/index.ts
+// imports `app` directly and wraps it with serverless-http instead — Vercel
+// manages the HTTP server itself, and static files are served by Vercel's CDN
+// (see vercel.json), not by Express.
+if (!process.env.VERCEL) {
+  startServer().catch(console.error);
+}
+
+export default app;
