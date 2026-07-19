@@ -69,12 +69,12 @@ export default function Navbar({ lang, setLang, onDemoClick, hasResult }: Navbar
           
           {/* Logo */}
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 flex items-center justify-center shrink-0">
+            <div className="w-12 h-12 flex items-center justify-center shrink-0">
               <img src="https://i.ibb.co.com/GfDK38yS/Yora-logo.png" alt="Yora Logo" className="w-full h-full object-contain" referrerPolicy="no-referrer" />
             </div>
             <div className="flex flex-col">
-              <span className="font-sans text-base md:text-lg font-black tracking-wide text-[#1A1A1A] leading-tight">YORA</span>
-              <span className="font-sans text-[11px] font-semibold text-[#6B7280] leading-none hidden sm:block">Contract Risk Analyzer</span>
+              <span className="font-sans text-base md:text-lg font-black tracking-wide text-[#1A1A1A] leading-tight">YORA | 永睿</span>
+              <span className="font-sans text-[11px] font-semibold text-[#6B7280] leading-none hidden sm:block mt-0.5">Contract Risk Analyzer</span>
             </div>
           </div>
 
