@@ -114,7 +114,13 @@ export default function Scanner({
     const cleanEmail = emailInput.trim();
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(cleanEmail)) {
-      setEmailError(lang === 'cn' ? '请输入有效的电子邮件地址' : 'Masukkan alamat email yang valid.');
+      setEmailError(
+        lang === 'cn' 
+          ? '请输入有效的电子邮件地址' 
+          : lang === 'en' 
+            ? 'Please enter a valid email address.' 
+            : 'Masukkan alamat email yang valid.'
+      );
       return;
     }
     
@@ -131,14 +137,14 @@ export default function Scanner({
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || 'Gagal mengirim kode OTP.');
+        throw new Error(data.error || T[lang].otpErrSendFailed);
       }
 
       setStep(2);
       setCountdown(60);
       setOtpError('');
     } catch (err: any) {
-      setEmailError(err.message || 'Terjadi kesalahan saat mengirim kode.');
+      setEmailError(err.message || T[lang].otpErrGeneral);
     } finally {
       setSendingOtp(false);
     }
@@ -147,7 +153,7 @@ export default function Scanner({
   const handleVerifyOtp = async (codeToVerify?: string) => {
     const code = codeToVerify || otpInput;
     if (code.length !== 6) {
-      setOtpError(lang === 'cn' ? '请输入6位数的验证码' : 'Masukkan 6 digit kode verifikasi.');
+      setOtpError(T[lang].otpErrLength);
       return;
     }
 
@@ -164,7 +170,7 @@ export default function Scanner({
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || 'Kode verifikasi salah.');
+        throw new Error(data.error || T[lang].otpErrInvalid);
       }
 
       if (data.sessionToken) {
@@ -174,7 +180,7 @@ export default function Scanner({
       // Success! Set the verified userEmail globally
       setUserEmail(emailInput.trim());
     } catch (err: any) {
-      setOtpError(err.message || 'Verifikasi gagal.');
+      setOtpError(err.message || T[lang].otpErrFailed);
     } finally {
       setVerifyingOtp(false);
     }
@@ -372,10 +378,10 @@ export default function Scanner({
                 <>
                   <div className="space-y-2">
                     <h3 className="text-xl md:text-2xl font-bold text-on-surface leading-tight">
-                      Masukkan email kamu untuk mulai analisis kontrak
+                      {T[lang].otpEnterEmail}
                     </h3>
                     <p className="text-on-surface-variant text-sm font-medium leading-relaxed">
-                      Kami akan kirim kode verifikasi ke email kamu.
+                      {T[lang].otpWeWillSend}
                     </p>
                   </div>
                   <form onSubmit={handleSendOtp} className="w-full space-y-4">
@@ -387,7 +393,7 @@ export default function Scanner({
                           setEmailInput(e.target.value);
                           if (emailError) setEmailError('');
                         }}
-                        placeholder="email@bisnis.com"
+                        placeholder={T[lang].otpPlaceholder || "email@bisnis.com"}
                         className={`w-full px-5 py-4 border rounded-lg bg-[#FAFAFA] outline-none text-base md:text-[15px] font-medium transition-all ${
                           emailError ? 'border-[#E30613] focus:ring-[#E30613]/20' : 'border-outline-variant focus:border-[#E30613] focus:ring-[#E30613]/20'
                         }`}
@@ -406,10 +412,10 @@ export default function Scanner({
                       {sendingOtp ? (
                         <>
                           <Loader2 size={18} className="animate-spin" />
-                          Mengirim Kode...
+                          {T[lang].otpSending}
                         </>
                       ) : (
-                        "Kirim Kode →"
+                        T[lang].otpSendBtn
                       )}
                     </button>
                   </form>
@@ -418,10 +424,16 @@ export default function Scanner({
                 <>
                   <div className="space-y-2">
                     <h3 className="text-xl md:text-2xl font-bold text-on-surface leading-tight">
-                      Cek email kamu
+                      {T[lang].otpCheckEmail}
                     </h3>
                     <p className="text-on-surface-variant text-sm font-medium leading-relaxed">
-                      Kami kirim kode 6 digit ke <span className="font-semibold text-on-surface">{emailInput}</span>. Masukkan di bawah.
+                      {lang === 'cn' ? (
+                        <>我们已向 <span className="font-semibold text-on-surface">{emailInput}</span> 发送了一个6位数的验证码。请在下方输入。</>
+                      ) : lang === 'en' ? (
+                        <>We sent a 6-digit code to <span className="font-semibold text-on-surface">{emailInput}</span>. Enter it below.</>
+                      ) : (
+                        <>Kami kirim kode 6 digit ke <span className="font-semibold text-on-surface">{emailInput}</span>. Masukkan di bawah.</>
+                      )}
                     </p>
                   </div>
                   <form onSubmit={(e) => { e.preventDefault(); handleVerifyOtp(); }} className="w-full space-y-4">
@@ -453,10 +465,10 @@ export default function Scanner({
                       {verifyingOtp ? (
                         <>
                           <Loader2 size={18} className="animate-spin" />
-                          Memverifikasi...
+                          {T[lang].otpVerifying}
                         </>
                       ) : (
-                        "Verifikasi →"
+                        T[lang].otpVerifyBtn
                       )}
                     </button>
 
@@ -467,7 +479,7 @@ export default function Scanner({
                         onClick={() => handleSendOtp()}
                         className="text-[#E30613] hover:underline disabled:text-on-surface-variant/40 disabled:no-underline cursor-pointer transition-colors"
                       >
-                        {countdown > 0 ? `Kirim ulang kode (${countdown}s)` : "Kirim ulang kode"}
+                        {countdown > 0 ? `${T[lang].otpResendCount} (${countdown}s)` : T[lang].otpResend}
                       </button>
                       
                       <button
@@ -479,7 +491,7 @@ export default function Scanner({
                         }}
                         className="text-on-surface-variant hover:text-on-surface hover:underline cursor-pointer transition-colors"
                       >
-                        ← Ganti email
+                        {T[lang].otpChangeEmail}
                       </button>
                     </div>
                   </form>
